@@ -32,3 +32,11 @@ To run the proof of reserve app, use the following command:
 cargo run --release
 ```
 
+### Benchmarking
+
+To benchmark the merkle tree lib, run the commamnd below
+
+```
+cargo bench
+```
+

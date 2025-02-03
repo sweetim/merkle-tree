@@ -1,4 +1,4 @@
-use merkle_root_lib;
+use merkle_tree_lib;
 use rocket::serde::{json::Json, Serialize};
 use rocket::State;
 
@@ -36,7 +36,7 @@ fn proof_by_user_id(state: &State<AppState>, user_id: &str) -> Json<MerkleProof>
 }
 
 struct AppState {
-    tree: merkle_root_lib::MerkleTree,
+    tree: merkle_tree_lib::MerkleTree,
 }
 
 #[launch]
@@ -55,7 +55,7 @@ fn rocket() -> _ {
     let tag_leaf = "ProofOfReserve_Leaf";
     let tag_branch = "ProofOfReserve_Branch";
 
-    let tree = merkle_root_lib::MerkleTree::build(tag_leaf, tag_branch, &user_data);
+    let tree = merkle_tree_lib::MerkleTree::build(tag_leaf, tag_branch, &user_data);
 
     rocket::build().manage(AppState { tree }).mount(
         "/",

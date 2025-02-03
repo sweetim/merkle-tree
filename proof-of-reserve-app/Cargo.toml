@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-merkle-root-lib = { path="../merkle-root-lib" }
+merkle-tree-lib = { path="../merkle-tree-lib" }
 rocket = { version =  "^0.5.1", features = ["json"] }
 

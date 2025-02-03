@@ -1,12 +1,12 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use merkle_root_lib;
+use merkle_tree_lib;
 
-fn bench_merkle_root_lib_build(c: &mut Criterion) {
-    c.bench_function("merkle_root_lib::build", |b| {
+fn bench_merkle_tree_lib_build(c: &mut Criterion) {
+    c.bench_function("merkle_tree_lib::build", |b| {
         b.iter(|| {
             std::hint::black_box({
-                let user_data_large: Vec<(u32, u32)> = vec![0; 1_000_000]
+                let user_data_large: Vec<(u32, u32)> = vec![0; 100_000]
                     .iter()
                     .enumerate()
                     .map(|(i, _v)| {
@@ -18,7 +18,7 @@ fn bench_merkle_root_lib_build(c: &mut Criterion) {
                 let tag_leaf = "ProofOfReserve_Leaf";
                 let tag_branch = "ProofOfReserve_Branch";
 
-                merkle_root_lib::MerkleTree::build(tag_leaf, tag_branch, &user_data_large);
+                merkle_tree_lib::MerkleTree::build(tag_leaf, tag_branch, &user_data_large);
             });
         });
     });
@@ -26,6 +26,6 @@ fn bench_merkle_root_lib_build(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    bench_merkle_root_lib_build,
+    bench_merkle_tree_lib_build,
 );
 criterion_main!(benches);
