@@ -318,31 +318,53 @@ impl MerkleTree {
     where
         F: Fn(&UserData) -> bool,
     {
-        self.root.as_ref().and_then(|root| {
-            let mut stack = vec![(root, TraversePath::new())];
-
-            while let Some((node, path)) = stack.pop() {
-                if let Some(user_data) = &node.user_data {
-                    if predicate(user_data) {
-                        return Some((node.as_ref(), path));
-                    }
-                }
-
-                if let Some(left) = &node.left {
-                    let mut left_path = path.clone();
-                    left_path.add_step(hex::encode(&node.hash), NodeDirection::Left);
-                    stack.push((left, left_path));
-                }
-
-                if let Some(right) = &node.right {
-                    let mut right_path = path.clone();
-                    right_path.add_step(hex::encode(&node.hash), NodeDirection::Right);
-                    stack.push((right, right_path));
-                }
-            }
-
+        if let Some(root) = &self.root {
+            let mut path = TraversePath::new();
+            Self::search_node_with_path(root, &predicate, &mut path)
+        } else {
             None
-        })
+        }
+    }
+    
+    fn search_node_with_path<'a, F>(
+        node: &'a MerkleNode,
+        predicate: &F,
+        path: &mut TraversePath,
+    ) -> Option<(&'a MerkleNode, TraversePath)>
+    where
+        F: Fn(&UserData) -> bool,
+    {
+        if let Some(user_data) = &node.user_data {
+            if predicate(user_data) {
+                return Some((
+                    node,
+                    TraversePath {
+                        directions: path.directions.clone(),
+                        hashes: path.hashes.clone(),
+                    },
+                ));
+            }
+        }
+
+        if let Some(left) = &node.left {
+            path.add_step(hex::encode(&node.hash), NodeDirection::Left); // 0 for left
+            if let Some(result) = Self::search_node_with_path(left, predicate, path) {
+                return Some(result);
+            }
+            path.hashes.pop(); // Backtrack
+            path.directions.pop();
+        }
+
+        if let Some(right) = &node.right {
+            path.add_step(hex::encode(&node.hash), NodeDirection::Right); // 1 for right
+            if let Some(result) = Self::search_node_with_path(right, predicate, path) {
+                return Some(result);
+            }
+            path.hashes.pop(); // Backtrack
+            path.directions.pop();
+        }
+
+        None
     }
 }
 
