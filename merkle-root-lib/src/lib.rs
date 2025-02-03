@@ -25,6 +25,12 @@ pub struct MerkleNode {
 }
 
 impl MerkleNode {
+    /// Creates a new leaf node with the given hash and user data.
+    ///
+    /// # Arguments
+    ///
+    /// * `hash`: The hash of the leaf node's data.
+    /// * `user_data`: The user data associated with the leaf node.
     fn new_leaf(hash: Vec<u8>, user_data: Option<UserData>) -> Self {
         MerkleNode {
             hash,
@@ -34,6 +40,15 @@ impl MerkleNode {
         }
     }
 
+    /// Creates a new branch node with the given left and right children and tag.
+    /// The hash of the branch node is calculated by concatenating the hashes of its children
+    /// and applying the `tagged_hash` function with the provided tag.
+    ///
+    /// # Arguments
+    ///
+    /// * `left`: The left child node.
+    /// * `right`: The right child node.
+    /// * `tag`: The tag used for calculating the branch node's hash.
     fn new_branch(left: MerkleNode, right: MerkleNode, tag: &str) -> Self {
         let combined = vec![left.hash.clone(), right.hash.clone()].concat();
         let hash = tagged_hash(tag, &combined);
@@ -105,11 +120,23 @@ impl TraversePath {
         }
     }
 
+    /// Adds a step to the `TraversePath`.
+    ///
+    /// # Arguments
+    ///
+    /// * `hash`: The hash of the node visited in this step.
+    /// * `direction`: The direction taken to reach the node (Left or Right).
     fn add_step(&mut self, hash: String, direction: NodeDirection) {
         self.hashes.push(hash);
         self.directions.push(direction);
     }
 
+    /// Converts the `TraversePath` to a vector of (hash, direction) tuples.
+    /// The direction is represented as a `u8` (0 for Left, 1 for Right, 2 for Root).
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<(String, u8)>` representing the path.
     pub fn to_vec(&self) -> Vec<(String, u8)> {
         self.hashes
             .iter()
@@ -131,6 +158,13 @@ struct TraverseStep<'a> {
 }
 
 impl MerkleTree {
+    /// Builds a Merkle Tree from the given user data.
+    ///
+    /// # Arguments
+    ///
+    /// * `tag_leaf`: The tag used for hashing leaf nodes.
+    /// * `tag_branch`: The tag used for hashing branch nodes.
+    /// * `user_data`: A slice of tuples, where each tuple contains a user ID and balance.
     pub fn build(tag_leaf: &str, tag_branch: &str, user_data: &[(u32, u32)]) -> Self {
         if user_data.is_empty() {
             return MerkleTree { root: None };
@@ -168,10 +202,22 @@ impl MerkleTree {
         }
     }
 
+    /// Returns the hash of the root node of the Merkle Tree.
     pub fn root(&self) -> Option<String> {
         self.root.as_ref().map(|node| hex::encode(&node.hash))
     }
 
+    /// Iterates over the tree level by level and applies the given function to each node.
+    ///
+    /// # Arguments
+    ///
+    /// * `map_fn`: A function that takes a `&TraverseStep` and returns a String.
+    ///              This function is called for each node in the tree.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing a `Vec<String>` if the tree is not empty, `None` otherwise.
+    /// Each string in the vector is the result of applying `map_fn` to a node.
     fn iterate_tree(&self, map_fn: fn(&TraverseStep) -> String) -> Option<Vec<String>> {
         self.root.as_ref().map(|root| {
             let mut output = Vec::new();
@@ -209,6 +255,7 @@ impl MerkleTree {
         })
     }
 
+    /// Displays the Merkle Tree in an indented format.
     pub fn display_tree(&self) -> String {
         match self.iterate_tree(|step| {
             let indent = " ".repeat(step.level as usize);
@@ -216,7 +263,7 @@ impl MerkleTree {
                 "{}{}: {}",
                 indent,
                 step.direction,
-                Self::truncate_middle(hex::encode(&step.current_node.hash).as_str(), 10)
+                truncate_middle(hex::encode(&step.current_node.hash).as_str(), 10)
             )
         }) {
             Some(output) => output.join("\n"),
@@ -224,10 +271,12 @@ impl MerkleTree {
         }
     }
 
+    /// Displays the Merkle Tree as a Mermaid diagram.
+    /// Use the mermaid editor to visualize the diagram https://mermaid.live/
     pub fn display_mermaid_diagram(&self) -> String {
         match self.iterate_tree(|step| {
             let current_node_hash = hex::encode(&step.current_node.hash);
-            let truncated_current_node_hash = Self::truncate_middle(current_node_hash.as_str(), 10);
+            let truncated_current_node_hash = truncate_middle(current_node_hash.as_str(), 10);
             let current_node_label =
                 (step.current_node.user_data.as_ref()).map_or(String::from(""), |item| {
                     format!(
@@ -255,19 +304,16 @@ impl MerkleTree {
         }
     }
 
-    fn truncate_middle(input: &str, max_len: usize) -> String {
-        let len = input.len();
-        if len <= max_len {
-            return input.to_string();
-        }
-
-        let half_len = max_len / 2;
-        let start = &input[..half_len];
-        let end = &input[len - (max_len - half_len)..];
-
-        format!("{}...{}", start, end)
-    }
-
+    /// Searches for a user with the given predicate.
+    ///
+    /// # Arguments
+    ///
+    /// * `predicate`: A function that takes a `&UserData` and returns a boolean.
+    ///              It returns true if the user data matches the search criteria, false otherwise.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing a tuple of `(&MerkleNode, TraversePath)` if a matching user is found, `None` otherwise.
     pub fn search_with_path<F>(&self, predicate: F) -> Option<(&MerkleNode, TraversePath)>
     where
         F: Fn(&UserData) -> bool,
@@ -298,9 +344,48 @@ impl MerkleTree {
             None
         })
     }
-
 }
 
+/// Truncates a string in the middle if it exceeds the maximum length.
+///
+/// If the input string's length is less than or equal to `max_len`, it returns the original string.
+/// Otherwise, it returns a new string with the first `max_len / 2` characters, an ellipsis ("..."),
+/// and the last `max_len - (max_len / 2)` characters.
+///
+/// # Arguments
+///
+/// * `input`: The string to truncate.
+/// * `max_len`: The maximum length of the string.
+///
+/// # Returns
+///
+/// A string of truncated text.
+fn truncate_middle(input: &str, max_len: usize) -> String {
+    let len = input.len();
+    if len <= max_len {
+        return input.to_string();
+    }
+
+    let half_len = max_len / 2;
+    let start = &input[..half_len];
+    let end = &input[len - (max_len - half_len)..];
+
+    format!("{}...{}", start, end)
+}
+
+/// Calculates a tagged hash using SHA256.
+///
+/// This function takes a tag and an input byte slice, calculates the SHA256 hash of the tag,
+/// then calculates the SHA256 hash of the concatenation of the tag's hash (twice) and the input.
+///
+/// # Arguments
+///
+/// * `tag`: The tag string.
+/// * `input`: The input byte slice.
+///
+/// # Returns
+///
+/// The tagged SHA256 hash as a `Vec<u8>`.
 fn tagged_hash(tag: &str, input: &[u8]) -> Vec<u8> {
     let mut hasher = Sha256::new();
     hasher.update(tag.as_bytes());
@@ -311,14 +396,22 @@ fn tagged_hash(tag: &str, input: &[u8]) -> Vec<u8> {
     hasher.update(&tag_hash);
     hasher.update(input);
     hasher.finalize().to_vec()
-
 }
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use rstest::rstest;
+
+    #[rstest]
+    #[case("abcdefghijklmnopqrstuvwxyz", 10, "abcde...vwxyz")]
+    #[case("abcdefghijklmnopqrstuvwxyz", 5, "ab...xyz")]
+    #[case("abcdefghijklmnopqrstuvwxyz", 2, "a...z")]
+    #[case("abcdefghijklmnopqrstuvwxyz", 1, "...z")]
+    fn it_can_truncate_middle(#[case] input: &str, #[case] max_len: usize, #[case] expected: &str) {
+        let actual = super::truncate_middle(input, max_len);
+        assert_eq!(actual, expected);
+    }
 
     #[rstest]
     #[case(
