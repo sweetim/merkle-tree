@@ -10,11 +10,11 @@ A rust library that provides the merkle tree algorithm
 
 A REST API server that exposes 3 API
 
-| endpoint         | description                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------------- |
-| /proof           | Displays the merkle root of the data                                                              |
-| /proof/mermaid   | Displays the Merkle Tree as a Mermaid diagram and view it at (mermaid)[https://mermaid.live/edit] |
-| /proof/<user-id> | Searches for a user with the given ID and display the proof                                       |
+| endpoint           | description                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------- |
+| /proof             | Displays the merkle root of the data                                                              |
+| /proof/mermaid     | Displays the Merkle Tree as a Mermaid diagram and view it at (mermaid)[https://mermaid.live/edit] |
+| /proof/`<user-id>` | Searches for a user with the given ID and display the proof                                       |
 
 
 
