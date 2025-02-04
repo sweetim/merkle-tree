@@ -1,4 +1,4 @@
-use merkle_tree_lib;
+use merkle_tree_lib::{self, MerkleTreeData};
 use rocket::serde::{json::Json, Serialize};
 use rocket::State;
 
@@ -26,17 +26,33 @@ struct MerkleProof {
 fn proof_by_user_id(state: &State<AppState>, user_id: &str) -> Json<MerkleProof> {
     let (node, path) = state
         .tree
-        .search_with_path(|user_data| user_data.user_id == user_id.parse::<u32>().unwrap())
+        .search_with_path(|user_data| user_data.id == user_id.parse::<u32>().unwrap())
         .unwrap();
 
     Json(MerkleProof {
-        user_balance: node.user_data.as_ref().unwrap().user_balance,
+        user_balance: node.user_data.as_ref().unwrap().balance,
         proof: path.to_vec(),
     })
 }
 
+#[derive(Debug, Default, Clone)]
+struct UserData {
+    id: u32,
+    balance: u32,
+}
+
+impl MerkleTreeData for UserData {
+    fn serialize(&self) -> Vec<u8> {
+        format!("{},{}", self.id, self.balance).as_bytes().to_vec()
+    }
+
+    fn mermaid_node_label(&self) -> String {
+        format!("<br>User ID: {}<br>Balance: {}", self.id, self.balance)
+    }
+}
+
 struct AppState {
-    tree: merkle_tree_lib::MerkleTree,
+    tree: merkle_tree_lib::MerkleTree<UserData>,
 }
 
 #[launch]
@@ -50,7 +66,10 @@ fn rocket() -> _ {
         (6, 6666),
         (7, 7777),
         (8, 8888),
-    ];
+    ]
+    .into_iter()
+    .map(|(id, balance)| UserData { id, balance })
+    .collect();
 
     let tag_leaf = "ProofOfReserve_Leaf";
     let tag_branch = "ProofOfReserve_Branch";

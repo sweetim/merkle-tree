@@ -1,37 +1,27 @@
 use sha2::{Digest, Sha256};
 use std::fmt;
 
-#[derive(Clone, Debug)]
-pub struct UserData {
-    pub user_id: u32,
-    pub user_balance: u32,
-}
-
-impl UserData {
-    fn new(user_id: u32, user_balance: u32) -> Self {
-        UserData {
-            user_id,
-            user_balance,
-        }
-    }
-}
+pub mod util;
 
 #[derive(Clone, Default)]
-pub struct MerkleNode {
+pub struct MerkleNode<T> {
     hash: Vec<u8>,
-    left: Option<Box<MerkleNode>>,
-    right: Option<Box<MerkleNode>>,
-    pub user_data: Option<UserData>,
+    left: Option<Box<MerkleNode<T>>>,
+    right: Option<Box<MerkleNode<T>>>,
+    pub user_data: Option<T>,
 }
 
-impl MerkleNode {
+impl<T> MerkleNode<T>
+where
+    T: Clone + fmt::Debug,
+{
     /// Creates a new leaf node with the given hash and user data.
     ///
     /// # Arguments
     ///
     /// * `hash`: The hash of the leaf node's data.
     /// * `user_data`: The user data associated with the leaf node.
-    fn new_leaf(hash: Vec<u8>, user_data: Option<UserData>) -> Self {
+    fn new_leaf(hash: Vec<u8>, user_data: Option<T>) -> Self {
         MerkleNode {
             hash,
             left: None,
@@ -42,14 +32,14 @@ impl MerkleNode {
 
     /// Creates a new branch node with the given left and right children and tag.
     /// The hash of the branch node is calculated by concatenating the hashes of its children
-    /// and applying the `tagged_hash` function with the provided tag.
+    /// and applying the `tagged_hash` function witsh the provided tag.
     ///
     /// # Arguments
     ///
     /// * `left`: The left child node.
     /// * `right`: The right child node.
     /// * `tag`: The tag used for calculating the branch node's hash.
-    fn new_branch(left: MerkleNode, right: MerkleNode, tag: &str) -> Self {
+    fn new_branch(left: MerkleNode<T>, right: MerkleNode<T>, tag: &str) -> Self {
         let combined = vec![left.hash.clone(), right.hash.clone()].concat();
         let hash = tagged_hash(tag, &combined);
         MerkleNode {
@@ -61,18 +51,16 @@ impl MerkleNode {
     }
 }
 
-impl fmt::Display for MerkleNode {
+impl<T> fmt::Display for MerkleNode<T>
+where
+    T: fmt::Display,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let formatted = self
             .user_data
             .as_ref()
             .map_or(hex::encode(&self.hash), |user_data| {
-                format!(
-                    "{} (User ID: {}, Balance: {})",
-                    hex::encode(&self.hash),
-                    user_data.user_id,
-                    user_data.user_balance
-                )
+                format!("{} ({})", hex::encode(&self.hash), user_data)
             });
 
         write!(f, "{}", formatted)
@@ -146,18 +134,26 @@ impl TraversePath {
     }
 }
 
-pub struct MerkleTree {
-    root: Option<Box<MerkleNode>>,
+pub struct MerkleTree<T> {
+    root: Option<Box<MerkleNode<T>>>,
 }
 
-struct TraverseStep<'a> {
-    parent_node: Option<&'a MerkleNode>,
-    current_node: &'a MerkleNode,
+struct TraverseStep<'a, T> {
+    parent_node: Option<&'a MerkleNode<T>>,
+    current_node: &'a MerkleNode<T>,
     level: u32,
     direction: NodeDirection,
 }
 
-impl MerkleTree {
+pub trait MerkleTreeData {
+    fn serialize(&self) -> Vec<u8>;
+    fn mermaid_node_label(&self) -> String;
+}
+
+impl<T> MerkleTree<T>
+where
+    T: Clone + fmt::Debug + MerkleTreeData + Default,
+{
     /// Builds a Merkle Tree from the given user data.
     ///
     /// # Arguments
@@ -165,19 +161,17 @@ impl MerkleTree {
     /// * `tag_leaf`: The tag used for hashing leaf nodes.
     /// * `tag_branch`: The tag used for hashing branch nodes.
     /// * `user_data`: A slice of tuples, where each tuple contains a user ID and balance.
-    pub fn build(tag_leaf: &str, tag_branch: &str, user_data: &[(u32, u32)]) -> Self {
+    pub fn build(tag_leaf: &str, tag_branch: &str, user_data: &Vec<T>) -> Self {
         if user_data.is_empty() {
             return MerkleTree { root: None };
         }
 
-        let mut nodes: Vec<MerkleNode> = user_data
+        let mut nodes: Vec<MerkleNode<T>> = user_data
             .iter()
-            .map(|&(user_id, user_balance)| {
-                let user_data = UserData::new(user_id, user_balance);
-                let serialized = format!("({},{})", user_id, user_balance);
+            .map(|data| {
                 MerkleNode::new_leaf(
-                    tagged_hash(tag_leaf, serialized.as_bytes()),
-                    Some(user_data),
+                    tagged_hash(tag_leaf, data.serialize().as_slice()),
+                    Some(data.clone()),
                 )
             })
             .collect();
@@ -218,11 +212,11 @@ impl MerkleTree {
     ///
     /// An `Option` containing a `Vec<String>` if the tree is not empty, `None` otherwise.
     /// Each string in the vector is the result of applying `map_fn` to a node.
-    fn iterate_tree(&self, map_fn: fn(&TraverseStep) -> String) -> Option<Vec<String>> {
+    fn iterate_tree(&self, map_fn: fn(&TraverseStep<T>) -> String) -> Option<Vec<String>> {
         self.root.as_ref().map(|root| {
             let mut output = Vec::new();
 
-            let mut stack: Vec<TraverseStep> = vec![TraverseStep {
+            let mut stack: Vec<TraverseStep<T>> = vec![TraverseStep {
                 parent_node: None,
                 current_node: root,
                 level: 0,
@@ -277,14 +271,9 @@ impl MerkleTree {
         match self.iterate_tree(|step| {
             let current_node_hash = hex::encode(&step.current_node.hash);
             let truncated_current_node_hash = truncate_middle(current_node_hash.as_str(), 10);
-            let current_node_label =
-                (step.current_node.user_data.as_ref()).map_or(String::from(""), |item| {
-                    format!(
-                        "<br>User ID: {}<br>Balance: {}",
-                        item.user_id, item.user_balance
-                    )
-                });
-
+            let current_node_label = (step.current_node.user_data.as_ref())
+                .map_or(String::from(""), |item| item.mermaid_node_label());
+            println!("{current_node_label} lable");
             let node_mermaid = format!(
                 "Node_{current_node_hash}[{truncated_current_node_hash}{current_node_label}]",
             );
@@ -314,9 +303,9 @@ impl MerkleTree {
     /// # Returns
     ///
     /// An `Option` containing a tuple of `(&MerkleNode, TraversePath)` if a matching user is found, `None` otherwise.
-    pub fn search_with_path<F>(&self, predicate: F) -> Option<(&MerkleNode, TraversePath)>
+    pub fn search_with_path<F>(&self, predicate: F) -> Option<(&MerkleNode<T>, TraversePath)>
     where
-        F: Fn(&UserData) -> bool,
+        F: Fn(&T) -> bool,
     {
         if let Some(root) = &self.root {
             let mut path = TraversePath::new();
@@ -325,14 +314,14 @@ impl MerkleTree {
             None
         }
     }
-    
+
     fn search_node_with_path<'a, F>(
-        node: &'a MerkleNode,
+        node: &'a MerkleNode<T>,
         predicate: &F,
         path: &mut TraversePath,
-    ) -> Option<(&'a MerkleNode, TraversePath)>
+    ) -> Option<(&'a MerkleNode<T>, TraversePath)>
     where
-        F: Fn(&UserData) -> bool,
+        F: Fn(&T) -> bool,
     {
         if let Some(user_data) = &node.user_data {
             if predicate(user_data) {
@@ -347,20 +336,20 @@ impl MerkleTree {
         }
 
         if let Some(left) = &node.left {
-            path.add_step(hex::encode(&node.hash), NodeDirection::Left); // 0 for left
+            path.add_step(hex::encode(&node.hash), NodeDirection::Left);
             if let Some(result) = Self::search_node_with_path(left, predicate, path) {
                 return Some(result);
             }
-            path.hashes.pop(); // Backtrack
+            path.hashes.pop();
             path.directions.pop();
         }
 
         if let Some(right) = &node.right {
-            path.add_step(hex::encode(&node.hash), NodeDirection::Right); // 1 for right
+            path.add_step(hex::encode(&node.hash), NodeDirection::Right);
             if let Some(result) = Self::search_node_with_path(right, predicate, path) {
                 return Some(result);
             }
-            path.hashes.pop(); // Backtrack
+            path.hashes.pop();
             path.directions.pop();
         }
 
@@ -456,14 +445,40 @@ mod tests {
         assert_eq!(hex::encode(actual), expected);
     }
 
+    #[derive(Clone, Debug, Default)]
+    pub struct UserItem {
+        value: String,
+    }
+
+    impl MerkleTreeData for UserItem {
+        fn serialize(&self) -> Vec<u8> {
+            format!("{}", self.value)
+                .as_bytes()
+                .to_vec()
+        }
+
+        fn mermaid_node_label(&self) -> String {
+            format!(
+                "<br>{}",
+                self.value
+            )
+        }
+    }
+
     #[test]
     fn it_can_build_a_tree() {
-        let user_data = vec![(1, 1111), (2, 2222), (3, 3333), (4, 4444), (5, 5555)];
-        let tag_leaf = "ProofOfReserve_Leaf";
-        let tag_branch = "ProofOfReserve_Branch";
+        let user_data = vec!["aaa", "bbb", "ccc", "ddd", "eee"]
+            .into_iter()
+            .map(|v| UserItem {
+                value: String::from(v)
+            })
+            .collect();
+
+        let tag_leaf = "Bitcoin_Transaction";
+        let tag_branch = "Bitcoin_Transaction";
 
         let tree = MerkleTree::build(tag_leaf, tag_branch, &user_data);
-
+            println!("{}", tree.display_mermaid_diagram());
         assert_eq!(
             tree.root().unwrap(),
             "e752d40ca9a0626be5fea078ef35216a9c50554934a54dfbe2eb60195af66c85"
@@ -472,14 +487,20 @@ mod tests {
 
     #[test]
     fn it_can_search_with_path() {
-        let user_data = vec![(1, 1111), (2, 2222), (3, 3333), (4, 4444), (5, 5555)];
-        let tag_leaf = "ProofOfReserve_Leaf";
-        let tag_branch = "ProofOfReserve_Branch";
+        let user_data = vec!["aaa", "bbb", "ccc", "ddd", "eee"]
+            .into_iter()
+            .map(|v| UserItem {
+                value: String::from(v)
+            })
+            .collect();
+
+        let tag_leaf = "Bitcoin_Transaction";
+        let tag_branch = "Bitcoin_Transaction";
 
         let tree = MerkleTree::build(tag_leaf, tag_branch, &user_data);
-        let user_id = "3";
+        let user_id = "aaa";
         let (_node, path) = tree
-            .search_with_path(|user_data| user_data.user_id == user_id.parse::<u32>().unwrap())
+            .search_with_path(|user_data| user_data.value == user_id)
             .unwrap();
 
         assert_eq!(
