@@ -161,12 +161,12 @@ where
     /// * `tag_leaf`: The tag used for hashing leaf nodes.
     /// * `tag_branch`: The tag used for hashing branch nodes.
     /// * `user_data`: A slice of tuples, where each tuple contains a user ID and balance.
-    pub fn build(tag_leaf: &str, tag_branch: &str, user_data: &Vec<T>) -> Self {
-        if user_data.is_empty() {
+    pub fn build(tag_leaf: &str, tag_branch: &str, input: &Vec<T>) -> Self {
+        if input.is_empty() {
             return MerkleTree { root: None };
         }
 
-        let mut nodes: Vec<MerkleNode<T>> = user_data
+        let mut nodes: Vec<MerkleNode<T>> = input
             .iter()
             .map(|data| {
                 MerkleNode::new_leaf(
@@ -446,39 +446,92 @@ mod tests {
     }
 
     #[derive(Clone, Debug, Default)]
-    pub struct UserItem {
+    #[allow(non_camel_case_types)]
+    pub struct UserItem_A {
         value: String,
     }
 
-    impl MerkleTreeData for UserItem {
+    impl MerkleTreeData for UserItem_A {
         fn serialize(&self) -> Vec<u8> {
-            format!("{}", self.value)
+            format!("{}", self.value).as_bytes().to_vec()
+        }
+
+        fn mermaid_node_label(&self) -> String {
+            format!("<br>{}", self.value)
+        }
+    }
+
+    fn generate_user_item_a() -> Vec<UserItem_A> {
+        vec!["aaa", "bbb", "ccc", "ddd", "eee"]
+            .into_iter()
+            .map(|v| UserItem_A {
+                value: String::from(v),
+            })
+            .collect()
+    }
+
+    #[derive(Clone, Debug, Default)]
+    #[allow(non_camel_case_types)]
+    pub struct UserItem_B {
+        pub id: u32,
+        pub balance: u32,
+    }
+
+    impl MerkleTreeData for UserItem_B {
+        fn serialize(&self) -> Vec<u8> {
+            format!("({},{})", self.id, self.balance)
                 .as_bytes()
                 .to_vec()
         }
 
         fn mermaid_node_label(&self) -> String {
-            format!(
-                "<br>{}",
-                self.value
-            )
+            format!("<br>User ID: {}<br>Balance: {}", self.id, self.balance)
         }
     }
 
-    #[test]
-    fn it_can_build_a_tree() {
-        let user_data = vec!["aaa", "bbb", "ccc", "ddd", "eee"]
+    fn generate_user_item_b() -> Vec<UserItem_B> {
+        vec![(1, 1111), (2, 2222), (3, 3333), (4, 4444), (5, 5555)]
             .into_iter()
-            .map(|v| UserItem {
-                value: String::from(v)
-            })
-            .collect();
+            .map(|(id, balance)| UserItem_B { id, balance })
+            .collect()
+    }
+
+    #[test]
+    fn it_can_build_a_tree_with_empty_input() {
+        let input: Vec<UserItem_A> = vec![];
+
+        let tag_leaf = "Bitcoin_Transaction";
+        let tag_branch = "Bitcoin_Transaction";
+
+        let tree = MerkleTree::build(tag_leaf, tag_branch, &input);
+
+        assert!(tree.root().is_none());
+    }
+
+    #[test]
+    fn it_can_build_a_tree_user_item_a() {
+        let user_data = generate_user_item_a();
 
         let tag_leaf = "Bitcoin_Transaction";
         let tag_branch = "Bitcoin_Transaction";
 
         let tree = MerkleTree::build(tag_leaf, tag_branch, &user_data);
-            println!("{}", tree.display_mermaid_diagram());
+
+        assert_eq!(
+            tree.root().unwrap(),
+            "4aa906745f72053498ecc74f79813370a4fe04f85e09421df2d5ef760dfa94b5"
+        );
+    }
+
+    #[test]
+    fn it_can_build_a_tree_user_item_b() {
+        let user_data = generate_user_item_b();
+
+        let tag_leaf = "ProofOfReserve_Leaf";
+        let tag_branch = "ProofOfReserve_Branch";
+
+        let tree = MerkleTree::build(tag_leaf, tag_branch, &user_data);
+
         assert_eq!(
             tree.root().unwrap(),
             "e752d40ca9a0626be5fea078ef35216a9c50554934a54dfbe2eb60195af66c85"
@@ -486,13 +539,8 @@ mod tests {
     }
 
     #[test]
-    fn it_can_search_with_path() {
-        let user_data = vec!["aaa", "bbb", "ccc", "ddd", "eee"]
-            .into_iter()
-            .map(|v| UserItem {
-                value: String::from(v)
-            })
-            .collect();
+    fn it_can_search_with_path_user_item_a() {
+        let user_data = generate_user_item_a();
 
         let tag_leaf = "Bitcoin_Transaction";
         let tag_branch = "Bitcoin_Transaction";
@@ -501,6 +549,38 @@ mod tests {
         let user_id = "aaa";
         let (_node, path) = tree
             .search_with_path(|user_data| user_data.value == user_id)
+            .unwrap();
+
+        assert_eq!(
+            path.to_vec(),
+            vec![
+                (
+                    "4aa906745f72053498ecc74f79813370a4fe04f85e09421df2d5ef760dfa94b5".to_string(),
+                    0u8
+                ),
+                (
+                    "718b18c132f71dad76a3977a587e40c876bab3436b0f9a0446dbfadca2c13ea3".to_string(),
+                    0u8
+                ),
+                (
+                    "631bae42ba587408a741fa7d482a955d059caa471c5d66548d44a6ed234e782c".to_string(),
+                    0u8
+                )
+            ]
+        );
+    }
+
+    #[test]
+    fn it_can_search_with_path_user_item_b() {
+        let user_data = generate_user_item_b();
+
+        let tag_leaf = "ProofOfReserve_Leaf";
+        let tag_branch = "ProofOfReserve_Branch";
+
+        let tree = MerkleTree::build(tag_leaf, tag_branch, &user_data);
+        let user_id = 3u32;
+        let (_node, path) = tree
+            .search_with_path(|user_data| user_data.id == user_id)
             .unwrap();
 
         assert_eq!(

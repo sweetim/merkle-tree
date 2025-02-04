@@ -16,7 +16,6 @@ impl MerkleTreeData for UserData {
     }
 }
 
-
 pub fn generate_random_user_data(n: usize) -> Vec<UserData> {
     vec![0; n]
         .iter()

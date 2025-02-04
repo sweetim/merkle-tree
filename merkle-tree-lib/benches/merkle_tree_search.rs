@@ -13,9 +13,7 @@ fn bench_merkle_tree_lib_search_with_path(c: &mut Criterion) {
     for id in [1, 10, 100, 1_000, 10_000, 100_000, 1_000_000].iter() {
         group.bench_with_input(BenchmarkId::from_parameter(id), id, |b, &id| {
             b.iter(|| {
-                std::hint::black_box({
-                    tree.search_with_path(|user_data| user_data.id == id)
-                });
+                std::hint::black_box(tree.search_with_path(|user_data| user_data.id == id));
             });
         });
     }
