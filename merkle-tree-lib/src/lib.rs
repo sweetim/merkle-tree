@@ -397,7 +397,7 @@ fn truncate_middle(input: &str, max_len: usize) -> String {
 /// # Returns
 ///
 /// The tagged SHA256 hash as a `Vec<u8>`.
-fn tagged_hash(tag: &str, input: &[u8]) -> Vec<u8> {
+pub fn tagged_hash(tag: &str, input: &[u8]) -> Vec<u8> {
     let mut hasher = Sha256::new();
     hasher.update(tag.as_bytes());
     let tag_hash = hasher.finalize();
@@ -440,7 +440,7 @@ mod tests {
         "aaa",
         "aa7deacc6231c611d10b4a2b14bec43c30251b977610fd5a322550003f2b216b"
     )]
-    fn tagged_hash(#[case] tag: &str, #[case] input: &str, #[case] expected: &str) {
+    fn it_can_tagged_hash(#[case] tag: &str, #[case] input: &str, #[case] expected: &str) {
         let actual = super::tagged_hash(tag, input.as_bytes());
         assert_eq!(hex::encode(actual), expected);
     }

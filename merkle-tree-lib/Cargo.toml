@@ -18,3 +18,8 @@ harness = false
 [[bench]]
 name = "merkle_tree_search"
 harness = false
+
+[[bench]]
+name = "tagged_hash"
+harness = false
+
